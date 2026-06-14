@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SHK Chatbot - Vorschau</title>
+<link rel="preconnect" href="https://api.fontshare.com">
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+<style>
+  body { margin: 0; font-family: 'General Sans', 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif; min-height: 100vh; background: linear-gradient(135deg, #0f2744 0%, #1a3d6f 20%, #2563a8 45%, #4a90d9 70%, #7ec8e3 100%); background-attachment: fixed; }
+  .hinweis { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(27,61,111,0.70); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.30); color: white; font-size: 12px; padding: 8px 16px; border-radius: 999px; opacity: 0.95; z-index: 1; white-space: nowrap; font-family: inherit; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); }
+  .demo-seite { padding: 70px 28px; color: rgba(255,255,255,0.75); max-width: 600px; }
+  .demo-seite h2 { color: white; font-weight: 700; }
+  .demo-seite p { line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="hinweis">Vorschau &middot; Lokaler Server l&auml;uft &middot; Echter Chat aktiv</div>
+<div class="demo-seite">
+  <h2>SHK Musterbetrieb</h2>
+  <p>Das ist eine Beispiel-Webseite, damit man sieht, wie das Widget auf einer Kundenseite wirkt. Der Chat-Button sitzt unten rechts.</p>
+</div>
+<div id="root"></div>
+<script>
+window.addEventListener("error", function (e) {
+  var d = document.createElement("div");
+  d.style.cssText = "position:fixed;bottom:8px;left:8px;right:8px;background:#FEF2F2;color:#DC2626;padding:10px;border-radius:8px;font:12px monospace;z-index:99999;white-space:pre-wrap;";
+  d.textContent = "Fehler beim Laden der Vorschau: " + e.message;
+  document.body.appendChild(d);
+});
+</script>
+<script type="text/babel" data-presets="react">
+const { useState, useRef, useEffect } = React;
+
+// ===== DIALOG DATA =====
+
+const MENU_BUTTONS = [
+  { id: "notdienst", label: "Notdienst", urgent: true, icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>, action: { type: "showNotdienst" } },
+  { id: "heizung", label: "Heizung", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>, action: { type: "showSubcategories", categoryId: "heizung", categoryLabel: "Heizung" } },
+  { id: "sanitaer", label: "Sanitär", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2C8.5 7 5 11 5 15a7 7 0 0 0 14 0C19 11 15.5 7 12 2z"/></svg>, action: { type: "showSubcategories", categoryId: "sanitaer", categoryLabel: "Sanitär" } },
+  { id: "lueftung", label: "Lüftung", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/><path d="M9.6 4.6A2 2 0 1 1 11 8H2"/><path d="M12.6 19.4A2 2 0 1 0 14 16H2"/></svg>, action: { type: "showSubcategories", categoryId: "lueftung", categoryLabel: "Lüftung" } },
+  { id: "klima", label: "Klima", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="3.5" x2="12" y2="20.5"/><line x1="4.64" y1="7.75" x2="19.36" y2="16.25"/><line x1="4.64" y1="16.25" x2="19.36" y2="7.75"/><path d="M9.5 5.5L12 3.5L14.5 5.5"/><path d="M9.5 18.5L12 20.5L14.5 18.5"/><path d="M16.38 6.58L19.36 7.75L18.88 10.92"/><path d="M7.62 17.42L4.64 16.25L5.12 13.08"/><path d="M5.12 10.92L4.64 7.75L7.62 6.58"/><path d="M18.88 13.08L19.36 16.25L16.38 17.42"/></svg>, action: { type: "showSubcategories", categoryId: "klima", categoryLabel: "Klima" } },
+];
+
+const SUBCATEGORY_MAP = {
+  sanitaer: [
+    { id: "wasser",        label: "Wasser",          hasDetail: true },
+    { id: "abwasser",      label: "Abwasser",         hasDetail: true },
+    { id: "wartung",       label: "Wartung",           isWartung: true },
+    { id: "modernisierung",label: "Modernisierung",   hasDetail: true, isBeratung: true },
+  ],
+  heizung: [
+    { id: "stoerung",      label: "Störung",          hasDetail: true },
+    { id: "wartung",       label: "Wartung",           isWartung: true },
+    { id: "modernisierung",label: "Modernisierung",   hasDetail: true, isBeratung: true },
+    { id: "sonstiges",     label: "Sonstiges",         isFreitext: true },
+  ],
+  klima: [
+    { id: "stoerung",      label: "Störung",          hasDetail: true },
+    { id: "modernisierung",label: "Modernisierung",   hasDetail: true, isBeratung: true },
+    { id: "wartung",       label: "Wartung",           isWartung: true },
+  ],
+  lueftung: [
+    { id: "stoerung",      label: "Störung",          hasDetail: true },
+    { id: "modernisierung",label: "Modernisierung",   hasDetail: true, isBeratung: true },
+    { id: "wartung",       label: "Wartung",           isWartung: true },
+  ],
+};
+
+const DETAIL_MAP = {
+  "sanitaer.wasser": [
+    { id: "rohrbruch",       label: "Rohrbruch / Wasseraustritt", urgent: true },
+    { id: "kein-warmwasser", label: "Kein oder wenig Warmwasser" },
+    { id: "druck",           label: "Wasserdruck zu niedrig" },
+    { id: "armatur",         label: "Armatur / Hahn defekt" },
+    { id: "sonstiges",       label: "Sonstiges" },
+  ],
+  "sanitaer.abwasser": [
+    { id: "verstopfung", label: "Verstopfung (Abfluss / WC)" },
+    { id: "geruch",      label: "Geruch aus dem Abfluss" },
+    { id: "hebeanlage",  label: "Hebeanlage stört" },
+    { id: "rueckstau",   label: "Rückstau" },
+    { id: "sonstiges",   label: "Sonstiges" },
+  ],
+  "sanitaer.modernisierung": [
+    { id: "bad-dusche", label: "Bad / Dusche" },
+    { id: "wc",         label: "WC" },
+    { id: "leitungen",  label: "Leitungen erneuern" },
+    { id: "sonstiges",  label: "Sonstiges" },
+  ],
+  "heizung.stoerung": [
+    { id: "kalt",            label: "Heizung bleibt kalt" },
+    { id: "fehlermeldung",   label: "Fehlermeldung am Display" },
+    { id: "druck",           label: "Druckverlust / zu wenig Druck" },
+    { id: "geraeusche",      label: "Geräusche" },
+    { id: "kein-warmwasser", label: "Kein Warmwasser" },
+    { id: "sonstiges",       label: "Sonstiges" },
+  ],
+  "heizung.modernisierung": [
+    { id: "heizungstausch", label: "Heizungstausch" },
+    { id: "waermepumpe",    label: "Wärmepumpe" },
+    { id: "sonstiges",      label: "Sonstiges" },
+  ],
+  "klima.stoerung": [
+    { id: "kuehlt-nicht",  label: "Kühlt nicht" },
+    { id: "fehlermeldung", label: "Fehlermeldung" },
+    { id: "geraeusch",     label: "Geräusch" },
+    { id: "wasser",        label: "Wasser tritt aus" },
+    { id: "sonstiges",     label: "Sonstiges" },
+  ],
+  "klima.modernisierung": [
+    { id: "neue-anlage", label: "Neue Anlage" },
+    { id: "erweiterung", label: "Erweiterung" },
+  ],
+  "lueftung.stoerung": [
+    { id: "laeuft-nicht",       label: "Läuft nicht" },
+    { id: "zu-laut",            label: "Zu laut" },
+    { id: "fehlermeldung",      label: "Fehlermeldung" },
+    { id: "schlechte-leistung", label: "Schlechte Leistung" },
+    { id: "sonstiges",          label: "Sonstiges" },
+  ],
+  "lueftung.modernisierung": [
+    { id: "neue-anlage", label: "Neue Lüftungsanlage" },
+  ],
+};
+
+const HEIZUNG_HERSTELLER = ["Viessmann", "Vaillant", "Buderus", "Wolf", "Brötje", "Weishaupt", "Weiß nicht / Andere"];
+
+const NOTDIENST_BUTTONS = [
+  { id: "wasserschaden",   label: "Wasserschaden" },
+  { id: "gasgeruch",       label: "Gasgeruch" },
+  { id: "heizungsausfall", label: "Heizungsausfall bei Frost" },
+  { id: "brand",           label: "Brand / Feuer" },
+];
+
+const NOTDIENST_TEXT = {
+  wasserschaden:   "Drehen Sie sofort den Haupthahn zu, damit kein weiteres Wasser austritt. Rufen Sie danach unseren Notdienst: +49 681 9999999. Wir kommen so schnell wie möglich.",
+  gasgeruch:       "Öffnen Sie sofort alle Fenster. Betätigen Sie keinen Schalter und zünden Sie kein Feuer an. Verlassen Sie das Gebäude und rufen Sie von draußen den Notruf 112 sowie unseren Notdienst: +49 681 9999999.",
+  heizungsausfall: "Wenn es draußen sehr kalt ist, lassen Sie die Wasserhähne leicht tropfen, um Frostschäden zu verhindern. Rufen Sie unseren Notdienst: +49 681 9999999. Wir helfen Ihnen schnell.",
+  brand:           "Verlassen Sie sofort das Gebäude und rufen Sie die Feuerwehr: 112. Wenn Sie in Sicherheit sind, können Sie unseren Notdienst kontaktieren: +49 681 9999999.",
+};
+
+const ANMERKUNG_FALLBACK = { label: "Ihre Anmerkungen", placeholder: "Beschreiben Sie Ihr Anliegen kurz..." };
+
+const MONATE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+const WOCHENTAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+const toISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const formatDatum = (iso) => {
+  if (!iso) return "";
+  const [j, m, t] = iso.split("-");
+  return `${t}.${m}.${j}`;
+};
+
+const KUNDENDATENBANK = {
+  "10001": { name: "Max Mustermann", telefon: "+49 681 123456", email: "max@beispiel.de", strasse: "Musterstraße 12, 66111 Saarbrücken" },
+  "10002": { name: "Anna Schmidt", telefon: "+49 681 654321", email: "anna@beispiel.de", strasse: "Hauptstraße 5, 66121 Saarbrücken" },
+};
+
+// ===== DESIGN TOKENS =====
+
+const colors = {
+  primary:    "#1B3D6F",
+  primaryLight: "#2B5EA7",
+  primaryDark:  "#142E54",
+  primaryTint:  "#EEF4FF",
+  bg:      "#F4F6F9",
+  white:   "#FFFFFF",
+  text:    "#1A1A2E",
+  textLight: "#64748B",
+  border:  "#E2E8F0",
+  urgent:  "#DC2626",
+  urgentBg:"#FEF2F2",
+  success: "#16A34A",
+  successBg:"#F0FDF4",
+};
+
+// Liquid Glass tokens — adjust these centrally to tune the whole look
+const G = {
+  blurFull:  "blur(28px) saturate(190%)",
+  blurMid:   "blur(16px) saturate(170%)",
+  blurLight: "blur(10px) saturate(150%)",
+
+  // Widget shell
+  shellBg:     "rgba(232,238,250,0.84)",
+  shellBorder: "1px solid rgba(255,255,255,0.62)",
+  shellShadow: "0 18px 60px rgba(0,0,0,0.24), 0 4px 16px rgba(0,0,0,0.10), inset 0 1.5px 0 rgba(255,255,255,0.72), inset 0 -1px 0 rgba(0,0,0,0.04)",
+
+  // Standard glass button (pills, list, hersteller)
+  btnBg:     "linear-gradient(140deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.04) 60%), rgba(255,255,255,0.62)",
+  btnBorder: "1px solid rgba(255,255,255,0.56)",
+  btnShadow: "inset 0 1.5px 0 rgba(255,255,255,0.80), inset 0 -1px 2px rgba(0,0,0,0.05), 0 2px 8px rgba(0,0,0,0.09)",
+
+  // Urgent pill variant
+  urgentPillBg:     "linear-gradient(140deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 60%), rgba(220,38,38,0.12)",
+  urgentPillBorder: "1px solid rgba(220,38,38,0.38)",
+  urgentPillShadow: "inset 0 1.5px 0 rgba(255,200,200,0.60), 0 2px 8px rgba(220,38,38,0.10)",
+
+  // Bot message bubble
+  botBg:     "linear-gradient(145deg, rgba(255,255,255,0.52) 0%, rgba(255,255,255,0.04) 60%), rgba(255,255,255,0.72)",
+  botBorder: "1px solid rgba(255,255,255,0.70)",
+  botShadow: "inset 0 1.5px 0 rgba(255,255,255,0.90), 0 2px 8px rgba(0,0,0,0.07)",
+
+  // User message bubble
+  userBg:     "linear-gradient(145deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0) 55%), rgba(27,61,111,0.88)",
+  userBorder: "1px solid rgba(255,255,255,0.28)",
+  userShadow: "inset 0 1.5px 0 rgba(255,255,255,0.40), 0 2px 10px rgba(0,0,0,0.18)",
+
+  // Notdienst bubble
+  notdienstBg:     "linear-gradient(145deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 55%), rgba(220,38,38,0.09)",
+  notdienstBorder: "1px solid rgba(220,38,38,0.30)",
+
+  // Primary CTA (brand-coloured glass)
+  primaryBg:     "linear-gradient(135deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0) 55%), rgba(27,61,111,0.90)",
+  primaryBorder: "1px solid rgba(255,255,255,0.30)",
+  primaryShadow: "inset 0 1.5px 0 rgba(255,255,255,0.42), 0 4px 16px rgba(27,61,111,0.30)",
+
+  // Urgent CTA (red glass)
+  urgentCtaBg:     "linear-gradient(135deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 55%), rgba(220,38,38,0.88)",
+  urgentCtaBorder: "1px solid rgba(255,180,180,0.50)",
+  urgentCtaShadow: "inset 0 1.5px 0 rgba(255,255,255,0.40), 0 4px 16px rgba(220,38,38,0.25)",
+
+  // Input bar at bottom
+  barBg:     "rgba(248,251,255,0.72)",
+  barBorder: "1px solid rgba(255,255,255,0.70)",
+  barShadow: "inset 0 1.5px 0 rgba(255,255,255,0.85)",
+
+  // Text input field (recessed)
+  fieldBg:     "rgba(255,255,255,0.48)",
+  fieldBorder: "1.5px solid rgba(255,255,255,0.55)",
+  fieldShadow: "inset 0 2px 5px rgba(0,0,0,0.07)",
+
+  // Send button
+  sendActiveBg:     "linear-gradient(145deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0) 50%), rgba(27,61,111,0.90)",
+  sendActiveBorder: "1px solid rgba(255,255,255,0.38)",
+  sendActiveShadow: "inset 0 1px 0 rgba(255,255,255,0.45), 0 2px 8px rgba(27,61,111,0.28)",
+  sendInactiveBg:   "rgba(255,255,255,0.38)",
+  sendInactiveBorder: "1px solid rgba(255,255,255,0.45)",
+
+  // Launcher orb
+  launcherBg:     "linear-gradient(145deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 48%), rgba(27,61,111,0.92)",
+  launcherBorder: "1px solid rgba(255,255,255,0.52)",
+  launcherShadow: "0 8px 32px rgba(27,61,111,0.45), 0 2px 8px rgba(0,0,0,0.22), inset 0 1.5px 0 rgba(255,255,255,0.68)",
+
+  // Dropdown & popups
+  popupBg:     "rgba(248,251,255,0.92)",
+  popupBlur:   "blur(28px) saturate(180%)",
+  popupBorder: "1px solid rgba(255,255,255,0.72)",
+  popupShadow: "0 4px 28px rgba(0,0,0,0.18), inset 0 1.5px 0 rgba(255,255,255,0.85)",
+
+  // Form inputs (opaque enough for legibility)
+  formFieldBg:     "rgba(255,255,255,0.68)",
+  formFieldBorder: "1.5px solid rgba(255,255,255,0.62)",
+  formFieldShadow: "inset 0 2px 4px rgba(0,0,0,0.05)",
+};
+
+// ===== BOT RESPONSE LOGIC =====
+
+function getBotResponse(action) {
+  switch (action.type) {
+    case "showSubcategories": {
+      const subs = SUBCATEGORY_MAP[action.categoryId] || [];
+      return {
+        content: "Was ist Ihr Anliegen?",
+        buttons: subs.map(s => ({
+          id: s.id, label: s.label,
+          action: s.isFreitext
+            ? { type: "showFreitext", categoryLabel: action.categoryLabel, subcategoryLabel: s.label }
+            : s.hasDetail
+            ? { type: "showDetails", categoryId: action.categoryId, categoryLabel: action.categoryLabel, subcategoryId: s.id, subcategoryLabel: s.label, isBeratung: s.isBeratung || false }
+            : { type: "showEndMessage", categoryLabel: action.categoryLabel, subcategoryLabel: s.label, isWartung: s.isWartung || false, isBeratung: s.isBeratung || false },
+        })),
+        buttonsLayout: "pills",
+      };
+    }
+    case "showDetails": {
+      const key = `${action.categoryId}.${action.subcategoryId}`;
+      const details = DETAIL_MAP[key] || [];
+      const needsHersteller = action.categoryId === "heizung" && action.subcategoryId === "stoerung";
+      return {
+        content: "Was genau ist das Problem?",
+        buttons: details.map(d => ({
+          id: d.id, label: d.label, urgent: d.urgent || false,
+          action: d.id === "sonstiges"
+            ? { type: "showFreitext", categoryLabel: action.categoryLabel, subcategoryLabel: action.subcategoryLabel }
+            : needsHersteller
+            ? { type: "showHersteller", categoryLabel: action.categoryLabel, subcategoryLabel: action.subcategoryLabel, detail: d.label, urgent: d.urgent || false }
+            : { type: "showEndMessage", categoryLabel: action.categoryLabel, subcategoryLabel: action.subcategoryLabel, detail: d.label, urgent: d.urgent || false, isBeratung: action.isBeratung || false },
+        })),
+        buttonsLayout: "list",
+      };
+    }
+    case "showHersteller":
+      return {
+        content: "Welcher Hersteller ist verbaut? Das hilft dem Techniker bei der Vorbereitung.",
+        buttons: HEIZUNG_HERSTELLER.map(h => ({
+          label: h,
+          action: { type: "showEndMessage", categoryLabel: action.categoryLabel, subcategoryLabel: action.subcategoryLabel, detail: action.detail, hersteller: h, urgent: action.urgent || false },
+        })),
+        buttonsLayout: "hersteller",
+      };
+    case "showEndMessage": {
+      let content;
+      if (action.isBeratung) content = "Prima, ich notiere das. Mein Kollege klärt beim Beratungstermin alles direkt vor Ort.";
+      else if (action.isWartung) content = "Ich notiere eine Wartungsanfrage. Wann würde es Ihnen passen?";
+      else if (action.urgent) content = "Ich habe Ihr Anliegen notiert. Damit schnell jemand zu Ihnen kommt, fragen wir direkt einen Termin an.";
+      else content = "Ich habe alles notiert. Sie können mir noch mehr beschreiben oder direkt einen Termin anfragen.";
+      return {
+        content,
+        buttons: [{ label: "Termin anfragen", primary: true, action: { type: "openTermin" } }],
+        buttonsLayout: "action",
+      };
+    }
+    case "showNotdienst":
+      return {
+        content: "Bei akuter Gefahr — Brand oder Gasgeruch: sofort Feuerwehr 112 anrufen.\n\nSonst: Gerät, Haupthahn oder Hauptschalter abschalten und unseren Notdienst anrufen: +49 681 9999999\n\nWas ist Ihr Notfall?",
+        buttons: NOTDIENST_BUTTONS.map(b => ({ ...b, urgent: true, action: { type: "notdienstType", typeId: b.id } })),
+        buttonsLayout: "list",
+        isNotdienst: true,
+      };
+    case "notdienstType":
+      return {
+        content: NOTDIENST_TEXT[action.typeId] || "Rufen Sie unseren Notdienst: +49 681 9999999.",
+        buttons: [{ label: "Notdienst anrufen: +49 681 9999999", primary: true, urgent: true, action: { type: "callNotdienst" } }],
+        buttonsLayout: "action",
+      };
+    case "showFreitext":
+      return {
+        content: "Beschreiben Sie kurz, worum es geht – ein, zwei Sätze genügen. Ich frage bei Bedarf nach und helfe Ihnen weiter. Ein Foto können Sie auch direkt anhängen.",
+      };
+    case "goHome":
+      return {
+        content: "Womit kann ich Ihnen noch helfen?",
+        buttons: MENU_BUTTONS,
+        buttonsLayout: "pills",
+      };
+    default:
+      return null;
+  }
+}
+
+// ===== HELPER COMPONENTS =====
+
+function Label({ children, required }) {
+  return (
+    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: colors.textLight, marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+      {children}{required && <span style={{ color: colors.urgent }}> *</span>}
+    </label>
+  );
+}
+
+function Field({ label, value, onChange, type = "text", placeholder, error, required, disabled }) {
+  return (
+    <div style={{ marginBottom: "11px" }}>
+      <Label required={required}>{label}</Label>
+      <input type={type} value={value} onChange={onChange} placeholder={placeholder} disabled={disabled}
+        style={{
+          width: "100%",
+          border: error ? `1.5px solid ${colors.urgent}` : G.formFieldBorder,
+          borderRadius: "9px",
+          padding: "9px 12px",
+          fontSize: "13px",
+          outline: "none",
+          color: colors.text,
+          fontFamily: "inherit",
+          boxSizing: "border-box",
+          background: disabled ? "rgba(255,255,255,0.38)" : error ? "rgba(254,242,242,0.80)" : G.formFieldBg,
+          backdropFilter: G.blurLight,
+          WebkitBackdropFilter: G.blurLight,
+          boxShadow: error ? "inset 0 2px 4px rgba(220,38,38,0.08)" : G.formFieldShadow,
+          cursor: disabled ? "not-allowed" : "text",
+        }} />
+      {error && <div style={{ fontSize: "11px", color: colors.urgent, marginTop: "3px" }}>{error}</div>}
+    </div>
+  );
+}
+
+function Kalender({ value, onSelect }) {
+  const heute = new Date();
+  heute.setHours(0, 0, 0, 0);
+  const maxDatum = new Date(heute.getFullYear(), heute.getMonth() + 12, heute.getDate());
+  const basis = value ? new Date(value + "T00:00:00") : heute;
+  const [monat, setMonat] = useState(new Date(basis.getFullYear(), basis.getMonth(), 1));
+  const popupRef = useRef(null);
+  useEffect(() => { popupRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, []);
+  const jahr = monat.getFullYear();
+  const mIdx = monat.getMonth();
+  const tageImMonat = new Date(jahr, mIdx + 1, 0).getDate();
+  const offset = (new Date(jahr, mIdx, 1).getDay() + 6) % 7;
+  const zellen = [...Array(offset).fill(null), ...Array.from({ length: tageImMonat }, (_, i) => i + 1)];
+  const ersterMonat = jahr === heute.getFullYear() && mIdx === heute.getMonth();
+  const letzterMonat = jahr === maxDatum.getFullYear() && mIdx === maxDatum.getMonth();
+  const navStyle = (disabled) => ({
+    width: "28px", height: "28px", border: G.btnBorder, borderRadius: "8px",
+    background: disabled ? "rgba(255,255,255,0.28)" : G.btnBg,
+    backdropFilter: disabled ? "none" : G.blurLight,
+    WebkitBackdropFilter: disabled ? "none" : G.blurLight,
+    boxShadow: disabled ? "none" : G.btnShadow,
+    cursor: disabled ? "default" : "pointer",
+    color: disabled ? "#CBD5E1" : colors.primary,
+    fontSize: "15px", fontWeight: "700", fontFamily: "inherit",
+  });
+  return (
+    <div ref={popupRef} style={{
+      position: "absolute", top: "calc(100% + 6px)", left: 0, width: "252px",
+      background: G.popupBg,
+      backdropFilter: G.popupBlur,
+      WebkitBackdropFilter: G.popupBlur,
+      border: G.popupBorder,
+      borderRadius: "14px",
+      boxShadow: G.popupShadow,
+      padding: "12px", zIndex: 50,
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+        <button type="button" disabled={ersterMonat} onClick={() => setMonat(new Date(jahr, mIdx - 1, 1))} style={navStyle(ersterMonat)}>‹</button>
+        <div style={{ fontSize: "13px", fontWeight: "700", color: colors.text }}>{MONATE[mIdx]} {jahr}</div>
+        <button type="button" disabled={letzterMonat} onClick={() => setMonat(new Date(jahr, mIdx + 1, 1))} style={navStyle(letzterMonat)}>›</button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px", marginBottom: "4px" }}>
+        {WOCHENTAGE.map((w) => <div key={w} style={{ textAlign: "center", fontSize: "10px", fontWeight: "600", color: colors.textLight, padding: "2px 0" }}>{w}</div>)}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px" }}>
+        {zellen.map((tag, i) => {
+          if (tag === null) return <div key={`leer-${i}`} />;
+          const datum = new Date(jahr, mIdx, tag);
+          const iso = toISO(datum);
+          const gesperrt = datum < heute || datum > maxDatum;
+          const istHeute = iso === toISO(heute);
+          const gewaehlt = value === iso;
+          return (
+            <button key={iso} type="button" disabled={gesperrt} onClick={() => onSelect(iso)}
+              style={{
+                height: "30px", borderRadius: "8px", fontSize: "12px", fontFamily: "inherit",
+                border: gewaehlt ? "1px solid rgba(27,61,111,0.40)" : istHeute ? `1.5px solid ${colors.primaryLight}` : "1px solid transparent",
+                background: gewaehlt
+                  ? `linear-gradient(145deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 55%), rgba(27,61,111,0.88)`
+                  : "transparent",
+                backdropFilter: gewaehlt ? G.blurLight : "none",
+                WebkitBackdropFilter: gewaehlt ? G.blurLight : "none",
+                boxShadow: gewaehlt ? "inset 0 1px 0 rgba(255,255,255,0.38)" : "none",
+                color: gesperrt ? "#CBD5E1" : gewaehlt ? "white" : colors.text,
+                fontWeight: gewaehlt || istHeute ? "700" : "400",
+                cursor: gesperrt ? "default" : "pointer",
+                transition: "all 0.13s",
+              }}
+              onMouseEnter={(e) => { if (!gesperrt && !gewaehlt) { e.currentTarget.style.background = G.btnBg; e.currentTarget.style.backdropFilter = G.blurLight; } }}
+              onMouseLeave={(e) => { if (!gewaehlt) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.backdropFilter = "none"; } }}>
+              {tag}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ===== MAIN COMPONENT =====
+
+function SHKChatbot() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const [step, setStep] = useState("chat");
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [pendingImage, setPendingImage] = useState(null);
+  const [chatContext, setChatContext] = useState({ category: "", subcategory: "", detail: "", hersteller: "" });
+  const [kundenTyp, setKundenTyp] = useState("neu");
+  const [kundennummer, setKundennummer] = useState("");
+  const [loginName, setLoginName] = useState("");
+  const [loginFehler, setLoginFehler] = useState("");
+  const [eingeloggterKunde, setEingeloggterKunde] = useState(null);
+  const [form, setForm] = useState({ name: "", telefon: "", email: "", strasse: "", datum: "", wunschzeit: "", nachricht: "" });
+  const [fehler, setFehler] = useState({});
+  const [kalenderOffen, setKalenderOffen] = useState(false);
+  const [sendet, setSendet] = useState(false);
+  const [sendefehler, setSendefehler] = useState("");
+  const [gemuted, setGemuted] = useState(false);
+  const [menuOffen, setMenuOffen] = useState(false);
+  const [ungelesen, setUngelesen] = useState(true);
+  const [chatScrolledUp, setChatScrolledUp] = useState(false);
+
+  const kalenderRef = useRef(null);
+  const menuRef = useRef(null);
+  const menuDropdownRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const scrollRef = useRef(null);
+
+  const handleChatScroll = (e) => {
+    const el = e.currentTarget;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setChatScrolledUp(distanceFromBottom > 80);
+  };
+
+  const showHomeButton = step !== "chat" || chatScrolledUp;
+
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => { if (step === "chat") inputRef.current?.focus(); }, [step]);
+
+  useEffect(() => {
+    if (isOpen && messages.length === 0) {
+      setMessages([{
+        role: "assistant",
+        content: "Hallo, wie kann ich Ihnen behilflich sein?",
+        meta: "Support-Assistent · gerade eben",
+        buttons: MENU_BUTTONS,
+        buttonsLayout: "pills",
+      }]);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!kalenderOffen) return;
+    const h = (e) => { if (kalenderRef.current && !kalenderRef.current.contains(e.target)) setKalenderOffen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [kalenderOffen]);
+
+  useEffect(() => {
+    if (!menuOffen) return;
+    const h = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target) && menuDropdownRef.current && !menuDropdownRef.current.contains(e.target)) setMenuOffen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [menuOffen]);
+
+  const closeChat = () => { setIsClosing(true); setTimeout(() => { setIsOpen(false); setIsClosing(false); }, 195); };
+  const updateForm = (key, val) => { setForm((f) => ({ ...f, [key]: val })); setFehler((f) => (f[key] ? { ...f, [key]: undefined } : f)); };
+
+  const playClick = () => {
+    if (gemuted) return;
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 600; osc.type = "sine";
+      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      osc.start(); osc.stop(ctx.currentTime + 0.08);
+    } catch {}
+  };
+
+  const handleButtonClick = (btn) => {
+    playClick();
+    const { action } = btn;
+    if (action.categoryLabel) setChatContext(c => ({ ...c, category: action.categoryLabel }));
+    if (action.subcategoryLabel) setChatContext(c => ({ ...c, subcategory: action.subcategoryLabel }));
+    if (action.detail) setChatContext(c => ({ ...c, detail: action.detail }));
+    if (action.hersteller) setChatContext(c => ({ ...c, hersteller: action.hersteller }));
+    if (action.type === "callNotdienst") { window.location.href = "tel:+496819999999"; return; }
+    if (action.type === "openTermin") {
+      setMessages(prev => { const u = [...prev]; u.push({ role: "user", content: btn.label, isChoice: true }); return u; });
+      if (eingeloggterKunde) setForm(f => ({ ...f, name: eingeloggterKunde.name, telefon: eingeloggterKunde.telefon, email: eingeloggterKunde.email, strasse: eingeloggterKunde.strasse }));
+      setStep("termin"); return;
+    }
+    const nextMsg = getBotResponse(action);
+    setMessages(prev => { const u = [...prev]; u.push({ role: "user", content: btn.label, isChoice: true }); if (nextMsg) u.push({ role: "assistant", ...nextMsg }); return u; });
+  };
+
+  const goHome = () => {
+    const resp = getBotResponse({ type: "goHome" });
+    setMessages(prev => [...prev, { role: "assistant", ...resp }]);
+    setChatContext({ category: "", subcategory: "", detail: "", hersteller: "" });
+  };
+
+  const handleFileSelect = async (e) => {
+    let file = e.target.files[0];
+    if (!file) return;
+    e.target.value = "";
+    const isHeic = file.type === "image/heic" || file.type === "image/heif" || file.name.toLowerCase().endsWith(".heic") || file.name.toLowerCase().endsWith(".heif");
+    if (!file.type.startsWith("image/") && !isHeic) { alert("Nur Bilddateien erlaubt."); return; }
+    if (isHeic) {
+      try {
+        const blob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 });
+        file = new File([blob], file.name.replace(/\.heic$/i, ".jpg"), { type: "image/jpeg" });
+      } catch { alert("HEIC-Konvertierung fehlgeschlagen. Bitte in den iPhone-Einstellungen Kamera → Format → Maximale Kompatibilität aktivieren."); return; }
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1500;
+        let w = img.naturalWidth, h = img.naturalHeight;
+        if (w > MAX || h > MAX) { if (w > h) { h = Math.round(h * MAX / w); w = MAX; } else { w = Math.round(w * MAX / h); h = MAX; } }
+        const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        setPendingImage({ base64: dataUrl.split(",")[1], mediaType: "image/jpeg", previewUrl: dataUrl });
+      };
+      img.onerror = () => alert("Bild konnte nicht gelesen werden.");
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const sendMessage = async () => {
+    if ((!input.trim() && !pendingImage) || isLoading) return;
+    let userContent = pendingImage
+      ? [{ type: "image", source: { type: "base64", media_type: pendingImage.mediaType, data: pendingImage.base64 } }, { type: "text", text: input.trim() || "Bitte analysiere dieses Bild im Kontext meines Anliegens." }]
+      : input.trim();
+    const userMsg = { role: "user", content: userContent, displayText: input.trim() || "Foto gesendet", previewUrl: pendingImage?.previewUrl || null };
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
+    setInput(""); setPendingImage(null); setIsLoading(true);
+    try {
+      const apiMessages = newMessages.map((m) => ({ role: m.role, content: typeof m.content === "string" ? m.content : m.content }));
+      const res = await fetch("/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, category: chatContext.category, subcategory: chatContext.subcategory || chatContext.detail, hersteller: chatContext.hersteller || undefined, messages: apiMessages }),
+      });
+      const data = await res.json();
+      setMessages([...newMessages, { role: "assistant", content: data.content[0].text }]);
+    } catch { setMessages([...newMessages, { role: "assistant", content: "Technischer Fehler. Bitte kontaktieren Sie uns direkt." }]); }
+    setIsLoading(false);
+  };
+
+  const loginAlsBestandskunde = () => {
+    setLoginFehler("");
+    const kunde = KUNDENDATENBANK[kundennummer.trim()];
+    if (!kunde) { setLoginFehler("Kundennummer nicht gefunden."); return; }
+    if (kunde.name.toLowerCase() !== loginName.trim().toLowerCase()) { setLoginFehler("Name stimmt nicht überein."); return; }
+    setEingeloggterKunde({ ...kunde, kundennummer: kundennummer.trim() });
+    setForm(f => ({ ...f, name: kunde.name, telefon: kunde.telefon, email: kunde.email, strasse: kunde.strasse }));
+  };
+
+  const validieren = () => {
+    const e = {};
+    if (!form.name.trim()) e.name = "Pflichtfeld";
+    if (!form.telefon.trim()) e.telefon = "Pflichtfeld";
+    if (!form.email.trim()) e.email = "Pflichtfeld";
+    else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = "Ungültige E-Mail";
+    if (!form.strasse.trim()) e.strasse = "Pflichtfeld";
+    if (!form.datum) e.datum = "Pflichtfeld";
+    setFehler(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const absenden = async () => {
+    if (!validieren()) return;
+    setSendet(true); setSendefehler("");
+    try {
+      const res = await fetch("/api/termin", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, bereich: chatContext.category, anliegen: chatContext.subcategory || chatContext.detail, hersteller: chatContext.hersteller || undefined }),
+      });
+      if (!res.ok) throw new Error("Server-Fehler " + res.status);
+      setStep("bestaetigung");
+    } catch { setSendefehler("Übertragung fehlgeschlagen. Bitte versuchen Sie es erneut."); }
+    setSendet(false);
+  };
+
+  const reset = () => {
+    setMessages([]); setInput(""); setPendingImage(null);
+    setChatContext({ category: "", subcategory: "", detail: "", hersteller: "" });
+    setStep("chat");
+    setKundenTyp("neu"); setKundennummer(""); setLoginName(""); setLoginFehler(""); setEingeloggterKunde(null);
+    setForm({ name: "", telefon: "", email: "", strasse: "", datum: "", wunschzeit: "", nachricht: "" }); setFehler({});
+    setKalenderOffen(false); setSendet(false); setSendefehler("");
+  };
+
+  // ===== GLASS BUTTON RENDERERS =====
+
+  const btnPill = (urgent) => ({
+    background: urgent ? G.urgentPillBg : G.btnBg,
+    backdropFilter: G.blurLight,
+    WebkitBackdropFilter: G.blurLight,
+    color: urgent ? colors.urgent : colors.primary,
+    border: urgent ? G.urgentPillBorder : G.btnBorder,
+    boxShadow: urgent ? G.urgentPillShadow : G.btnShadow,
+    borderRadius: "999px",
+    padding: "8px 15px",
+    fontSize: "13px",
+    fontWeight: urgent ? "600" : "500",
+    letterSpacing: "0.01em",
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    transition: "all 0.16s cubic-bezier(0.22,1,0.36,1)",
+    position: "relative",
+    overflow: "hidden",
+  });
+
+  const btnList = (urgent) => ({
+    background: urgent ? G.urgentPillBg : G.btnBg,
+    backdropFilter: G.blurLight,
+    WebkitBackdropFilter: G.blurLight,
+    color: urgent ? colors.urgent : colors.text,
+    border: urgent ? G.urgentPillBorder : G.btnBorder,
+    boxShadow: urgent ? G.urgentPillShadow : G.btnShadow,
+    borderRadius: "11px",
+    padding: "11px 14px",
+    fontSize: "13px",
+    fontWeight: urgent ? "600" : "500",
+    letterSpacing: "0.005em",
+    cursor: "pointer",
+    textAlign: "left",
+    width: "100%",
+    transition: "all 0.16s cubic-bezier(0.22,1,0.36,1)",
+    position: "relative",
+    overflow: "hidden",
+  });
+
+  const btnPrimary = (urgent) => ({
+    background: urgent ? G.urgentCtaBg : G.primaryBg,
+    backdropFilter: G.blurMid,
+    WebkitBackdropFilter: G.blurMid,
+    color: "white",
+    border: urgent ? G.urgentCtaBorder : G.primaryBorder,
+    boxShadow: urgent ? G.urgentCtaShadow : G.primaryShadow,
+    borderRadius: "11px",
+    padding: "12px 16px",
+    fontSize: "13.5px",
+    fontWeight: "600",
+    letterSpacing: "0.01em",
+    cursor: "pointer",
+    width: "100%",
+    transition: "all 0.16s cubic-bezier(0.22,1,0.36,1)",
+    position: "relative",
+    overflow: "hidden",
+  });
+
+  const renderButtons = (buttons, layout) => {
+    if (!buttons || buttons.length === 0) return null;
+
+    if (layout === "pills") return (
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "7px", marginTop: "10px" }}>
+        {buttons.map((btn, j) => (
+          <button key={j} style={btnPill(btn.urgent)} onClick={() => handleButtonClick(btn)}
+            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px) scale(1.02)"; e.currentTarget.style.boxShadow = btn.urgent ? `${G.urgentPillShadow}, 0 4px 12px rgba(220,38,38,0.18)` : `${G.btnShadow}, 0 4px 12px rgba(0,0,0,0.12)`; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0) scale(1)"; e.currentTarget.style.boxShadow = btn.urgent ? G.urgentPillShadow : G.btnShadow; }}>
+            {btn.icon && btn.icon}{btn.label}
+          </button>
+        ))}
+      </div>
+    );
+
+    if (layout === "list") return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "10px" }}>
+        {buttons.map((btn, j) => (
+          <button key={j} style={btnList(btn.urgent)} onClick={() => handleButtonClick(btn)}
+            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = btn.urgent ? `${G.urgentPillShadow}, 0 4px 12px rgba(220,38,38,0.14)` : `${G.btnShadow}, 0 4px 12px rgba(0,0,0,0.10)`; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = btn.urgent ? G.urgentPillShadow : G.btnShadow; }}>
+            {btn.label}
+          </button>
+        ))}
+      </div>
+    );
+
+    if (layout === "hersteller") return (
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "7px", marginTop: "10px" }}>
+        {buttons.map((btn, j) => (
+          <button key={j} onClick={() => handleButtonClick(btn)}
+            style={{
+              background: G.btnBg, backdropFilter: G.blurLight, WebkitBackdropFilter: G.blurLight,
+              color: colors.text, border: G.btnBorder, boxShadow: G.btnShadow,
+              borderRadius: "11px", padding: "10px", fontSize: "13px", fontWeight: "500",
+              letterSpacing: "0.005em", cursor: "pointer",
+              gridColumn: j === buttons.length - 1 && buttons.length % 2 !== 0 ? "1 / -1" : undefined,
+              transition: "all 0.16s cubic-bezier(0.22,1,0.36,1)",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.background = `linear-gradient(140deg, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0.08) 60%), rgba(238,244,255,0.80)`; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.background = G.btnBg; }}>
+            {btn.label}
+          </button>
+        ))}
+      </div>
+    );
+
+    if (layout === "action") return (
+      <div style={{ marginTop: "10px" }}>
+        {buttons.map((btn, j) => (
+          <button key={j} style={btnPrimary(btn.urgent)} onClick={() => handleButtonClick(btn)}
+            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.opacity = "0.92"; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.opacity = "1"; }}>
+            {btn.label}
+          </button>
+        ))}
+      </div>
+    );
+
+    return null;
+  };
+
+  const inputHasContent = !isLoading && (input.trim() || pendingImage);
+
+  return (
+    <div style={{ fontFamily: "'General Sans', 'Inter', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" }}>
+
+      {/* Launcher — glass orb */}
+      {!isOpen && (
+        <button onClick={() => { setIsOpen(true); setUngelesen(false); }}
+          style={{
+            position: "fixed", bottom: "24px", right: "24px",
+            width: "56px", height: "56px", borderRadius: "50%",
+            background: G.launcherBg,
+            backdropFilter: G.blurFull,
+            WebkitBackdropFilter: G.blurFull,
+            border: G.launcherBorder,
+            boxShadow: G.launcherShadow,
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 9999, transition: "transform 0.18s cubic-bezier(0.22,1,0.36,1), box-shadow 0.18s ease",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.06) translateY(-2px)"; e.currentTarget.style.boxShadow = "0 12px 40px rgba(27,61,111,0.55), 0 3px 10px rgba(0,0,0,0.24), inset 0 1.5px 0 rgba(255,255,255,0.72)"; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = "scale(1) translateY(0)"; e.currentTarget.style.boxShadow = G.launcherShadow; }}>
+          {ungelesen && (
+            <div style={{ position: "absolute", top: "1px", right: "1px", width: "17px", height: "17px", borderRadius: "50%", background: "rgba(204,13,57,0.92)", border: "1.5px solid rgba(255,255,255,0.60)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: "700", color: "white", lineHeight: 1 }}>1</div>
+          )}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </button>
+      )}
+
+      {/* Widget — glass shell */}
+      {(isOpen || isClosing) && (
+        <div style={{
+          position: "fixed", bottom: "88px", right: "24px",
+          width: "370px", maxWidth: "calc(100vw - 32px)",
+          height: "580px", maxHeight: "calc(100vh - 110px)",
+          borderRadius: "22px",
+          background: G.shellBg,
+          backdropFilter: G.blurFull,
+          WebkitBackdropFilter: G.blurFull,
+          border: G.shellBorder,
+          boxShadow: G.shellShadow,
+          display: "flex", flexDirection: "column",
+          zIndex: 9998, overflow: "hidden",
+          animation: isClosing ? "shkWidgetOut 0.195s cubic-bezier(0.22,1,0.36,1) both" : "shkWidgetIn 0.22s cubic-bezier(0.22,1,0.36,1) both",
+          transformOrigin: "bottom right",
+        }}>
+
+          {/* Header — brand-tinted glass with animated silk */}
+          <div style={{
+            background: "linear-gradient(130deg, #0F2040 0%, #1B3D6F 18%, #2B5EA7 42%, #1A4E8F 60%, #3076C2 78%, #1B3D6F 100%)",
+            backgroundSize: "300% 300%",
+            animation: "shkSilkBg 20s ease-in-out -7s infinite",
+            padding: "13px 16px 44px",
+            flexShrink: 0, position: "relative", overflow: "visible",
+            clipPath: "path('M 0,0 L 370,0 L 370,90 C 305,78 248,108 185,100 C 122,92 65,114 0,98 Z')",
+          }}>
+            {/* Silk blob layer */}
+            <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
+              <div style={{ position: "absolute", width: "260px", height: "260px", borderRadius: "50%", background: "radial-gradient(circle, rgba(255,255,255,0.62) 0%, transparent 70%)", top: "-80px", left: "-60px", animation: "shkSilk1 22s ease-in-out -8s infinite" }} />
+              <div style={{ position: "absolute", width: "200px", height: "200px", borderRadius: "50%", background: "radial-gradient(circle, rgba(255,255,255,0.40) 0%, transparent 70%)", top: "-30px", right: "-40px", animation: "shkSilk2 28s ease-in-out -14s infinite" }} />
+              <div style={{ position: "absolute", width: "180px", height: "180px", borderRadius: "50%", background: "radial-gradient(circle, rgba(255,255,255,0.52) 0%, transparent 70%)", bottom: "10px", left: "30%", animation: "shkSilk3 19s ease-in-out -5s infinite" }} />
+              <div style={{ position: "absolute", width: "150px", height: "150px", borderRadius: "50%", background: "radial-gradient(circle, rgba(4,10,26,0.42) 0%, transparent 70%)", top: "20px", right: "20%", animation: "shkSilk2 24s ease-in-out -11s infinite reverse" }} />
+            </div>
+            {/* Specular highlight strip */}
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.72) 28%, rgba(255,255,255,0.88) 50%, rgba(255,255,255,0.72) 72%, transparent 100%)", pointerEvents: "none", zIndex: 2 }} />
+
+            <div style={{ position: "relative", zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "11px" }}>
+                <div style={{ width: "38px", height: "38px", borderRadius: "50%", background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.35)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: "18px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.45)" }}>🔧</div>
+                <div>
+                  <div style={{ color: "white", fontWeight: "800", fontSize: "15.5px", lineHeight: "1.2", letterSpacing: "0.01em", textShadow: "0 1px 6px rgba(0,0,0,0.30)" }}>SHK Musterbetrieb</div>
+                  <div style={{ color: "rgba(255,255,255,0.80)", fontSize: "11px", display: "flex", alignItems: "center", gap: "5px", marginTop: "3px" }}>
+                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#4ADE80", display: "inline-block", flexShrink: 0, boxShadow: "0 0 5px rgba(74,222,128,0.80)" }} /> Antwort in der Regel sofort
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "2px", alignItems: "center" }}>
+                {[
+                  ...(showHomeButton ? [{ title: "Startmenü", onClick: goHome, svg: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> }] : []),
+                  { title: "Schließen", onClick: closeChat, svg: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg> },
+                ].map((btn, i) => (
+                  <button key={i} ref={i === 2 ? menuRef : undefined} onClick={btn.onClick} title={btn.title}
+                    style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", cursor: "pointer", padding: "6px", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.88, transition: "all 0.15s", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.28)" }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.background = "rgba(255,255,255,0.20)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = "0.88"; e.currentTarget.style.background = "rgba(255,255,255,0.10)"; }}>
+                    {btn.svg}
+                  </button>
+                ))}
+                <button ref={menuRef} onClick={() => setMenuOffen(v => !v)} title="Menü"
+                  style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", cursor: "pointer", padding: "6px", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.88, transition: "all 0.15s", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.28)" }}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.background = "rgba(255,255,255,0.20)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = "0.88"; e.currentTarget.style.background = "rgba(255,255,255,0.10)"; }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                </button>
+              </div>
+            </div>
+            <div style={{ position: "relative", zIndex: 1, minHeight: "18px", marginTop: "11px", fontSize: "12px", fontWeight: "500", color: "rgba(255,255,255,0.90)", textShadow: "0 1px 4px rgba(0,0,0,0.40)", letterSpacing: "0.01em" }}>
+              {step === "chat" && chatContext.category && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                  {MENU_BUTTONS.find(b => b.label === chatContext.category)?.icon}
+                  {chatContext.category}
+                  {chatContext.subcategory && <span style={{ opacity: 0.72 }}> · {chatContext.subcategory}</span>}
+                </span>
+              )}
+              {step === "termin" && <>{chatContext.category || "Termin"}{chatContext.subcategory && <span style={{ opacity: 0.72 }}> · {chatContext.subcategory}</span>}<span style={{ opacity: 0.72 }}> · Terminanfrage</span></>}
+              {step === "bestaetigung" && <>{chatContext.category || ""}{chatContext.subcategory && <span style={{ opacity: 0.72 }}> · {chatContext.subcategory}</span>}</>}
+            </div>
+          </div>
+
+          {/* Kebab dropdown — glass panel */}
+          {menuOffen && (
+            <div ref={menuDropdownRef} style={{
+              position: "absolute", top: "52px", right: "16px",
+              background: G.popupBg,
+              backdropFilter: G.popupBlur,
+              WebkitBackdropFilter: G.popupBlur,
+              border: G.popupBorder,
+              borderRadius: "12px",
+              boxShadow: G.popupShadow,
+              zIndex: 100, display: "flex", overflow: "hidden",
+            }}>
+              {[
+                {
+                  label: gemuted ? "Ton an" : "Ton aus",
+                  onClick: () => setGemuted(m => !m),
+                  svg: gemuted
+                    ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
+                  delay: "0ms",
+                },
+                {
+                  label: "Neuer Chat",
+                  onClick: () => { reset(); setMenuOffen(false); },
+                  svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+                  delay: "45ms",
+                },
+              ].map((item, i) => (
+                <div key={i} style={{ display: "flex" }}>
+                  {i > 0 && <div style={{ width: "1px", background: "rgba(255,255,255,0.60)", margin: "10px 0" }} />}
+                  <button onClick={item.onClick}
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: "14px 18px", display: "flex", flexDirection: "column", alignItems: "center", gap: "5px", animation: `shkMenuItemIn 0.18s cubic-bezier(0.22,1,0.36,1) ${item.delay} both`, transition: "background 0.12s" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "rgba(27,61,111,0.06)"}
+                    onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                    {item.svg}
+                    <span style={{ fontSize: "10px", color: colors.textLight, whiteSpace: "nowrap", fontWeight: "500" }}>{item.label}</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Scrollable content */}
+          <div ref={scrollRef} onScroll={handleChatScroll} style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", background: "transparent" }}>
+
+            {/* ===== CHAT ===== */}
+            {step === "chat" && (
+              <div>
+                {messages.map((msg, i) => (
+                  <div key={i} style={{ marginBottom: "4px" }}>
+                    <div style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", animation: i >= messages.length - 2 ? "shkMsgIn 0.20s cubic-bezier(0.22,1,0.36,1) both" : "none" }}>
+                      <div style={{
+                        maxWidth: msg.isChoice ? "70%" : msg.role === "user" ? "82%" : "92%",
+                        background: msg.role === "user" ? G.userBg : msg.isNotdienst ? G.notdienstBg : G.botBg,
+                        backdropFilter: G.blurMid,
+                        WebkitBackdropFilter: G.blurMid,
+                        border: msg.role === "user" ? G.userBorder : msg.isNotdienst ? G.notdienstBorder : G.botBorder,
+                        boxShadow: msg.role === "user" ? G.userShadow : G.botShadow,
+                        color: msg.role === "user" ? "white" : msg.isNotdienst ? colors.urgent : colors.text,
+                        borderRadius: msg.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                        padding: "10px 14px", fontSize: "13px", lineHeight: "1.56", whiteSpace: "pre-wrap",
+                      }}>
+                        {msg.previewUrl && <img src={msg.previewUrl} alt="Foto" style={{ maxWidth: "100%", borderRadius: "8px", marginBottom: "6px", display: "block" }} />}
+                        {msg.displayText || (typeof msg.content === "string" ? msg.content : "")}
+                      </div>
+                    </div>
+                    {msg.meta && <div style={{ fontSize: "10.5px", color: colors.textLight, marginTop: "3px", paddingLeft: "2px", marginBottom: "6px" }}>{msg.meta}</div>}
+                    {msg.buttons && i === messages.length - 1 && msg.role === "assistant" && (
+                      <div style={{ paddingLeft: "2px" }}>{renderButtons(msg.buttons, msg.buttonsLayout)}</div>
+                    )}
+                    {!msg.meta && !msg.buttons && <div style={{ marginBottom: "8px" }} />}
+                  </div>
+                ))}
+                {isLoading && (
+                  <div style={{ display: "flex", gap: "5px", padding: "8px 0 6px 4px" }}>
+                    {[0, 1, 2].map(i => (
+                      <div key={i} style={{ width: "7px", height: "7px", borderRadius: "50%", background: G.primaryBg, backdropFilter: G.blurLight, WebkitBackdropFilter: G.blurLight, border: G.primaryBorder, boxShadow: G.primaryShadow, animation: `shkDotWave 1.2s ease-in-out ${i * 0.15}s infinite` }} />
+                    ))}
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            )}
+
+            {/* ===== TERMIN ===== */}
+            {step === "termin" && (
+              <div>
+                <button onClick={() => setStep("chat")}
+                  style={{ display: "flex", alignItems: "center", gap: "4px", background: "none", border: "none", cursor: "pointer", color: colors.textLight, fontSize: "12px", marginBottom: "14px", padding: 0, fontFamily: "inherit", fontWeight: "500" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                  Zurück zum Chat
+                </button>
+
+                {/* Kunden-Typ Toggle */}
+                <div style={{ display: "flex", background: G.btnBg, backdropFilter: G.blurLight, WebkitBackdropFilter: G.blurLight, border: G.btnBorder, boxShadow: G.btnShadow, borderRadius: "11px", padding: "4px", marginBottom: "16px" }}>
+                  {["neu", "bestand"].map(typ => (
+                    <button key={typ} onClick={() => { setKundenTyp(typ); setLoginFehler(""); if (typ === "neu") { setEingeloggterKunde(null); setForm(f => ({ ...f, name: "", telefon: "", email: "", strasse: "" })); } }}
+                      style={{ flex: 1, padding: "8px", border: kundenTyp === typ ? "1px solid rgba(255,255,255,0.60)" : "1px solid transparent", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: "600", fontFamily: "inherit", background: kundenTyp === typ ? "rgba(255,255,255,0.70)" : "transparent", backdropFilter: kundenTyp === typ ? G.blurLight : "none", WebkitBackdropFilter: kundenTyp === typ ? G.blurLight : "none", color: kundenTyp === typ ? colors.primary : colors.textLight, boxShadow: kundenTyp === typ ? "inset 0 1px 0 rgba(255,255,255,0.80), 0 1px 4px rgba(0,0,0,0.08)" : "none", transition: "all 0.15s" }}>
+                      {typ === "neu" ? "Neukunde" : "Bestandskunde"}
+                    </button>
+                  ))}
+                </div>
+
+                {kundenTyp === "bestand" && !eingeloggterKunde && (
+                  <div style={{ background: G.btnBg, backdropFilter: G.blurLight, WebkitBackdropFilter: G.blurLight, border: G.btnBorder, boxShadow: G.btnShadow, borderRadius: "12px", padding: "14px", marginBottom: "16px" }}>
+                    <div style={{ fontSize: "11px", color: colors.textLight, marginBottom: "10px", fontWeight: "600", letterSpacing: "0.06em", textTransform: "uppercase" }}>Anmelden</div>
+                    <Field label="Kundennummer" value={kundennummer} onChange={e => setKundennummer(e.target.value)} placeholder="z.B. 10001" />
+                    <Field label="Nachname" value={loginName} onChange={e => setLoginName(e.target.value)} placeholder="Ihr Nachname" />
+                    {loginFehler && <div style={{ fontSize: "12px", color: colors.urgent, marginBottom: "8px" }}>⚠ {loginFehler}</div>}
+                    <button onClick={loginAlsBestandskunde} style={{ ...btnPrimary(false), borderRadius: "9px", fontSize: "13px", padding: "10px" }}>Anmelden & Daten laden</button>
+                    <div style={{ fontSize: "11px", color: colors.textLight, marginTop: "8px", textAlign: "center" }}>Testkunden: Nr. 10001 · Name: Mustermann</div>
+                  </div>
+                )}
+
+                {eingeloggterKunde && (
+                  <div style={{ background: "rgba(240,253,244,0.72)", backdropFilter: G.blurLight, WebkitBackdropFilter: G.blurLight, border: "1px solid rgba(187,247,208,0.70)", borderRadius: "10px", padding: "10px 14px", marginBottom: "14px", fontSize: "12px", color: colors.success, display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.70)" }}>
+                    <span>✓ Angemeldet als <strong>{eingeloggterKunde.name}</strong> (Nr. {eingeloggterKunde.kundennummer})</span>
+                    <button onClick={() => { setEingeloggterKunde(null); setKundennummer(""); setLoginName(""); setForm(f => ({ ...f, name: "", telefon: "", email: "", strasse: "" })); }} style={{ background: "none", border: "none", cursor: "pointer", color: colors.textLight, fontSize: "14px", fontFamily: "inherit" }}>×</button>
+                  </div>
+                )}
+
+                {(kundenTyp === "neu" || eingeloggterKunde) && (
+                  <>
+                    <Field label="Name" value={form.name} onChange={e => updateForm("name", e.target.value)} placeholder="Vor- und Nachname" error={fehler.name} required disabled={!!eingeloggterKunde} />
+                    <Field label="Telefon" type="tel" value={form.telefon} onChange={e => updateForm("telefon", e.target.value)} placeholder="+49 123 456789" error={fehler.telefon} required disabled={!!eingeloggterKunde} />
+                    <Field label="E-Mail" type="email" value={form.email} onChange={e => updateForm("email", e.target.value)} placeholder="ihre@email.de" error={fehler.email} required disabled={!!eingeloggterKunde} />
+                    <Field label="Straße & Hausnummer" value={form.strasse} onChange={e => updateForm("strasse", e.target.value)} placeholder="Musterstraße 12, 66111 Saarbrücken" error={fehler.strasse} required disabled={!!eingeloggterKunde} />
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "11px" }}>
+                      <div style={{ position: "relative" }} ref={kalenderRef}>
+                        <Label required>Wunschdatum</Label>
+                        <button type="button" onClick={() => setKalenderOffen(o => !o)}
+                          style={{ width: "100%", border: fehler.datum ? `1.5px solid ${colors.urgent}` : G.formFieldBorder, borderRadius: "9px", padding: "9px 10px", fontSize: "12px", color: form.datum ? colors.text : colors.textLight, fontFamily: "inherit", boxSizing: "border-box", background: G.formFieldBg, backdropFilter: G.blurLight, WebkitBackdropFilter: G.blurLight, boxShadow: G.formFieldShadow, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", outline: "none" }}>
+                          <span>{form.datum ? formatDatum(form.datum) : "Datum wählen"}</span>
+                          <span style={{ fontSize: "13px" }}>📅</span>
+                        </button>
+                        {kalenderOffen && <Kalender value={form.datum} onSelect={iso => { updateForm("datum", iso); setKalenderOffen(false); setFehler(f => ({ ...f, datum: undefined })); }} />}
+                        {fehler.datum && <div style={{ fontSize: "11px", color: colors.urgent, marginTop: "3px" }}>{fehler.datum}</div>}
+                      </div>
+                      <div>
+                        <Label>Wunschzeit</Label>
+                        <select value={form.wunschzeit} onChange={e => updateForm("wunschzeit", e.target.value)}
+                          style={{ width: "100%", border: G.formFieldBorder, borderRadius: "9px", padding: "9px 10px", fontSize: "12px", outline: "none", color: colors.text, fontFamily: "inherit", background: G.formFieldBg, backdropFilter: G.blurLight, WebkitBackdropFilter: G.blurLight, boxShadow: G.formFieldShadow, boxSizing: "border-box" }}>
+                          <option value="">Beliebig</option>
+                          <option value="Vormittags (8–12 Uhr)">Vormittags (8–12 Uhr)</option>
+                          <option value="Mittags (12–14 Uhr)">Mittags (12–14 Uhr)</option>
+                          <option value="Nachmittags (14–16 Uhr)">Nachmittags (14–16 Uhr)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: "16px" }}>
+                      <Label>{ANMERKUNG_FALLBACK.label}</Label>
+                      <textarea value={form.nachricht} onChange={e => updateForm("nachricht", e.target.value)} placeholder={ANMERKUNG_FALLBACK.placeholder}
+                        style={{ width: "100%", border: G.formFieldBorder, borderRadius: "9px", padding: "9px 12px", fontSize: "13px", outline: "none", color: colors.text, fontFamily: "inherit", resize: "none", height: "68px", boxSizing: "border-box", background: G.formFieldBg, backdropFilter: G.blurLight, WebkitBackdropFilter: G.blurLight, boxShadow: G.formFieldShadow }} />
+                    </div>
+
+                    {sendefehler && <div style={{ fontSize: "12px", color: colors.urgent, marginBottom: "10px", textAlign: "center" }}>⚠ {sendefehler}</div>}
+                    <button onClick={absenden} disabled={sendet}
+                      style={{ ...btnPrimary(false), background: sendet ? "rgba(148,163,184,0.60)" : G.primaryBg, boxShadow: sendet ? "none" : G.primaryShadow, cursor: sendet ? "not-allowed" : "pointer", fontSize: "14px", padding: "13px" }}>
+                      {sendet ? "Wird gesendet…" : "Terminanfrage senden →"}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ===== BESTÄTIGUNG ===== */}
+            {step === "bestaetigung" && (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", textAlign: "center", padding: "20px" }}>
+                <div style={{ width: "60px", height: "60px", borderRadius: "50%", background: "linear-gradient(145deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.04) 60%), rgba(22,163,74,0.18)", backdropFilter: G.blurMid, WebkitBackdropFilter: G.blurMid, border: "1px solid rgba(134,239,172,0.60)", boxShadow: "inset 0 1.5px 0 rgba(255,255,255,0.70)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "26px", marginBottom: "16px" }}>✓</div>
+                <div style={{ fontWeight: "700", fontSize: "16px", color: colors.text, marginBottom: "8px" }}>Anfrage eingegangen</div>
+                <div style={{ fontSize: "13px", color: colors.textLight, lineHeight: "1.6", marginBottom: "20px" }}>Wir melden uns innerhalb von 24 Stunden unter den angegebenen Kontaktdaten bei Ihnen.</div>
+                <div style={{ background: G.btnBg, backdropFilter: G.blurLight, WebkitBackdropFilter: G.blurLight, border: G.btnBorder, boxShadow: G.btnShadow, borderRadius: "12px", padding: "14px 16px", width: "100%", textAlign: "left", fontSize: "12px", marginBottom: "20px" }}>
+                  {[["Bereich", chatContext.category || "–"], ["Name", form.name], ["Adresse", form.strasse], ["Datum", `${formatDatum(form.datum)}${form.wunschzeit ? " · " + form.wunschzeit : ""}`]].map(([k, v]) => (
+                    <div key={k} style={{ marginBottom: "4px" }}>
+                      <span style={{ color: colors.textLight }}>{k}: </span>
+                      <span style={{ color: colors.text, fontWeight: "500" }}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+                  {[{ label: "← Zurück zum Chat", onClick: () => setStep("chat"), primary: true }, { label: "Neue Anfrage", onClick: reset, primary: false }].map((b, i) => (
+                    <button key={i} onClick={b.onClick}
+                      style={{ flex: 1, background: b.primary ? G.primaryBg : G.btnBg, backdropFilter: G.blurLight, WebkitBackdropFilter: G.blurLight, border: b.primary ? G.primaryBorder : G.btnBorder, boxShadow: b.primary ? G.primaryShadow : G.btnShadow, borderRadius: "10px", padding: "10px", cursor: "pointer", fontSize: "13px", color: b.primary ? "white" : colors.text, fontWeight: b.primary ? "600" : "500", fontFamily: "inherit", transition: "all 0.15s" }}>
+                      {b.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Termin-Shortcut — glass */}
+          {step === "chat" && messages.length > 0 && !isLoading && (
+            <div style={{ padding: "0 16px 8px", flexShrink: 0 }}>
+              <button onClick={() => { if (eingeloggterKunde) setForm(f => ({ ...f, name: eingeloggterKunde.name, telefon: eingeloggterKunde.telefon, email: eingeloggterKunde.email, strasse: eingeloggterKunde.strasse })); setStep("termin"); }}
+                style={{ width: "100%", background: G.btnBg, backdropFilter: G.blurLight, WebkitBackdropFilter: G.blurLight, border: G.btnBorder, boxShadow: G.btnShadow, borderRadius: "10px", padding: "9px", cursor: "pointer", fontSize: "12.5px", color: colors.primary, fontWeight: "600", fontFamily: "inherit", letterSpacing: "0.01em", transition: "all 0.16s cubic-bezier(0.22,1,0.36,1)" }}
+                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = `${G.btnShadow}, 0 4px 12px rgba(0,0,0,0.10)`; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = G.btnShadow; }}>
+                📅 Termin anfragen
+              </button>
+            </div>
+          )}
+
+          {/* Input bar — glass */}
+          {step === "chat" && (
+            <div style={{ padding: "10px 16px 14px", background: G.barBg, backdropFilter: G.blurMid, WebkitBackdropFilter: G.blurMid, borderTop: G.barBorder, boxShadow: G.barShadow, flexShrink: 0 }}>
+              {pendingImage && (
+                <div style={{ marginBottom: "8px", position: "relative", display: "inline-block" }}>
+                  <img src={pendingImage.previewUrl} alt="Vorschau" style={{ height: "60px", borderRadius: "8px", border: G.primaryBorder, display: "block" }} />
+                  <button onClick={() => setPendingImage(null)} style={{ position: "absolute", top: "-6px", right: "-6px", width: "18px", height: "18px", borderRadius: "50%", background: G.urgentCtaBg, border: G.urgentCtaBorder, color: "white", fontSize: "11px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                </div>
+              )}
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} style={{ display: "none" }} />
+                <button onClick={() => fileInputRef.current?.click()}
+                  style={{ background: pendingImage ? G.primaryBg : "transparent", backdropFilter: pendingImage ? G.blurLight : "none", WebkitBackdropFilter: pendingImage ? G.blurLight : "none", border: pendingImage ? G.primaryBorder : "none", boxShadow: pendingImage ? G.primaryShadow : "none", borderRadius: "8px", padding: "8px", cursor: "pointer", color: pendingImage ? "white" : colors.textLight, flexShrink: 0, display: "flex", alignItems: "center", transition: "all 0.15s" }}
+                  onMouseEnter={e => { if (!pendingImage) { e.currentTarget.style.color = colors.primary; e.currentTarget.style.background = G.btnBg; } }}
+                  onMouseLeave={e => { if (!pendingImage) { e.currentTarget.style.color = colors.textLight; e.currentTarget.style.background = "transparent"; } }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                </button>
+                <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendMessage()}
+                  placeholder={pendingImage ? "Beschreibung hinzufügen..." : "Nachricht schreiben…"}
+                  style={{ flex: 1, background: G.fieldBg, backdropFilter: G.blurLight, WebkitBackdropFilter: G.blurLight, border: G.fieldBorder, boxShadow: G.fieldShadow, borderRadius: "22px", padding: "9px 14px", fontSize: "13.5px", outline: "none", color: colors.text, fontFamily: "inherit", transition: "border-color 0.15s, box-shadow 0.15s" }}
+                  onFocus={e => { e.target.style.borderColor = "rgba(43,94,167,0.55)"; e.target.style.boxShadow = `${G.fieldShadow}, 0 0 0 3px rgba(27,61,111,0.08)`; }}
+                  onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.55)"; e.target.style.boxShadow = G.fieldShadow; }} />
+                <button onClick={sendMessage} disabled={!inputHasContent}
+                  style={{ background: inputHasContent ? G.sendActiveBg : G.sendInactiveBg, backdropFilter: G.blurLight, WebkitBackdropFilter: G.blurLight, border: inputHasContent ? G.sendActiveBorder : G.sendInactiveBorder, boxShadow: inputHasContent ? G.sendActiveShadow : "none", borderRadius: "50%", width: "36px", height: "36px", cursor: inputHasContent ? "pointer" : "not-allowed", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.16s cubic-bezier(0.22,1,0.36,1)" }}
+                  onMouseEnter={e => { if (inputHasContent) { e.currentTarget.style.transform = "scale(1.06)"; } }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={inputHasContent ? "white" : colors.textLight} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <style>{`
+        @import url('https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap');
+
+        @keyframes shkDotWave {
+          0%, 100% { transform: translateY(0) scale(0.9); opacity: 0.50; }
+          50%        { transform: translateY(-5px) scale(1); opacity: 1; }
+        }
+        @keyframes shkSilkBg {
+          0%, 100% { background-position: 0% 50%; }
+          33%       { background-position: 60% 0%; }
+          66%       { background-position: 100% 50%; }
+        }
+        @keyframes shkSilk1 {
+          0%, 100% { transform: translate(0%, 0%); }
+          25%  { transform: translate(10%, -14%); }
+          50%  { transform: translate(-6%, 10%); }
+          75%  { transform: translate(14%, 6%); }
+        }
+        @keyframes shkSilk2 {
+          0%, 100% { transform: translate(0%, 0%); }
+          30%  { transform: translate(-14%, 8%); }
+          60%  { transform: translate(8%, -12%); }
+          80%  { transform: translate(-10%, -6%); }
+        }
+        @keyframes shkSilk3 {
+          0%, 100% { transform: translate(0%, 0%); }
+          40%  { transform: translate(-12%, -10%); }
+          70%  { transform: translate(10%, 12%); }
+        }
+        @keyframes shkMenuItemIn {
+          from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes shkWidgetIn {
+          from { opacity: 0; transform: scale(0.94) translateY(10px); }
+          to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes shkWidgetOut {
+          from { opacity: 1; transform: scale(1) translateY(0); }
+          to   { opacity: 0; transform: scale(0.94) translateY(10px); }
+        }
+        @keyframes shkMsgIn {
+          from { opacity: 0; transform: translateY(10px); filter: blur(6px); }
+          to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+        }
+        @supports not (backdrop-filter: blur(1px)) {
+          /* Fallback: ramp up opacity so content stays readable without blur */
+        }
+        @media (prefers-reduced-motion: reduce) {
+          @keyframes shkWidgetIn  { from { opacity: 0; } to { opacity: 1; } }
+          @keyframes shkWidgetOut { from { opacity: 1; } to { opacity: 0; } }
+          @keyframes shkMsgIn     { from { opacity: 0; } to { opacity: 1; } }
+          @keyframes shkDotWave   { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(SHKChatbot));
+</script>
+</body>
+</html>
